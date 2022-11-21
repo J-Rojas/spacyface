@@ -1,5 +1,6 @@
-from typing import List, Iterable, Union
+from typing import List, Iterable, Union, Tuple
 import spacy
+from tqdm import tqdm
 from spacy.tokens.token import Token as SpacyToken
 from spacy.tokens.doc import Doc as SpacyDoc
 import torch
@@ -57,18 +58,20 @@ def MakeAligner(pretrained_tokenizer, spacy_language_model):
         @delegates(pretrained_tokenizer.__init__)
         def __init__(self, **kwargs):
             super().__init__(**kwargs)
+            spacy.require_gpu()
             self.spacy_nlp = spacy.load(spacy_language_model)
             self.meta_container = SimpleSpacyToken
 
-        def prep_sentence(self, s: str) -> str:
+        def prep_sentence(self, s: str) -> Tuple[(str, SpacyDoc, List)]:
             """Remove contractions and multiple spaces from input sentence"""
             s = re.sub(r"\s+", r" ", s).strip()
-            out = " ".join(self._to_normed_spacy(s))
-            return out
+            doc, tokens = self._to_normed_spacy(s)
+            out = " ".join(tokens)
+            return (out, doc, tokens)
 
         @delegates(pretrained_tokenizer.tokenize)
         def tokenize(self, s: str, **kwargs) -> List[str]:
-            s = self.prep_sentence(s)
+            s, _, _ = self.prep_sentence(s)
             return super().tokenize(s, **kwargs)
 
         def meta_tokenize(self, s: str) -> List[SimpleSpacyToken]:
@@ -77,7 +80,8 @@ def MakeAligner(pretrained_tokenizer, spacy_language_model):
             Due to implementation differences, does not provide the exact same API as the
             PreTrainedTokenizer's `tokenize` function
             """
-            meta_info = self._to_spacy_meta(self.prep_sentence(s))
+            out, doc, tokens = self.prep_sentence(s)
+            meta_info = self._to_spacy_meta(out, doc)
             return self._tokenize_from_spacy_meta(meta_info)
 
         def meta_from_tokens(self, sentence: str, tokens: List[str], perform_check=True) -> List[SimpleSpacyToken]:
@@ -104,8 +108,10 @@ def MakeAligner(pretrained_tokenizer, spacy_language_model):
                 is_tokenized = self.tokenize(sentence) == tokens
                 assert is_encoded or is_tokenized, "Can only take tokens that come from the original sentence!"
 
+            special_tokens = self.all_special_tokens
+
             for i, b in enumerate(tokens):
-                if b in self.all_special_tokens:
+                if b in special_tokens:
                     new_meta.append(self.meta_container(b))
                 else:
                     new_meta.append(orig_meta[j])
@@ -113,15 +119,14 @@ def MakeAligner(pretrained_tokenizer, spacy_language_model):
 
             return new_meta
 
-        def _to_normed_spacy(self, s: str) -> List[str]:
+        def _to_normed_spacy(self, s: str) -> Tuple[List, List[str]]:
             """Return the normalized tokens (i.e., language exceptions replaced by a lowercased version)"""
             doc = self.spacy_nlp(s)
             tokens = self._doc_to_fixed_tokens(doc)
-            return tokens
+            return doc, tokens
 
-        def _to_spacy_meta(self, s: str) -> List[SimpleSpacyToken]: # list of simple spacy tokens...
+        def _to_spacy_meta(self, s: str, doc: SpacyDoc) -> List[SimpleSpacyToken]: # list of simple spacy tokens...
             """Convert a string into a list of records containing simplified spacy information"""
-            doc = self.spacy_nlp(s)
             out = [self.meta_container(t) for t in doc]
             return out
 
