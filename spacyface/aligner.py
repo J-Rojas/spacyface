@@ -7,6 +7,7 @@ import regex as re
 
 from transformers import (
     BertTokenizer,
+    ElectraTokenizer,
     GPT2Tokenizer,
     RobertaTokenizer,
     DistilBertTokenizer,
@@ -242,6 +243,7 @@ def MakeAligner(pretrained_tokenizer, spacy_language_model):
 english = "en_core_web_sm"
 
 BertAligner = MakeAligner(BertTokenizer, english)
+ElectraAligner = MakeAligner(ElectraTokenizer, english)
 GPT2Aligner = MakeAligner(GPT2Tokenizer, english)
 RobertaAligner = MakeAligner(RobertaTokenizer, english)
 DistilBertAligner = MakeAligner(DistilBertTokenizer, english)
