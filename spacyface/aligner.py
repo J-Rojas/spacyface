@@ -62,8 +62,9 @@ def MakeAligner(pretrained_tokenizer, spacy_language_model):
             self.spacy_nlp = spacy.load(spacy_language_model)
             self.meta_container = SimpleSpacyToken
 
-        def prep_sentence(self, s: str) -> Tuple[(str, SpacyDoc, List)]:
+        def prep_sentence(self, s: str) -> Tuple[(str, SpacyDoc, Tuple)]:
             """Remove contractions and multiple spaces from input sentence"""
+            s = re.sub(r"--", r"- ", s).strip()
             s = re.sub(r"\s+", r" ", s).strip()
             doc, tokens = self._to_normed_spacy(s)
             out = " ".join(tokens)
